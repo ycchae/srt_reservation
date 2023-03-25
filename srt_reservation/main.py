@@ -2,6 +2,7 @@
 import os
 import time
 from random import randint
+
 from datetime import datetime
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
@@ -13,8 +14,47 @@ from selenium.common.exceptions import ElementClickInterceptedException, StaleEl
 from srt_reservation.exceptions import InvalidStationNameError, InvalidDateError, InvalidDateFormatError, InvalidTimeFormatError
 from srt_reservation.validation import station_list
 
-chromedriver_path = r'C:\workspace\chromedriver.exe'
+import requests
+from collections import defaultdict
 
+CHROMEDRIVER_PATH = "/usr/bin/chromedriver"
+
+SRT_BOT_TOKEN = ""
+SRT_BOT_CHANNEL = "srt-reservation-bot"
+try:
+    token_path = f"{os.path.dirname(os.path.abspath(__file__))}/my_slack_token.txt"
+    os.stat(token_path)
+    with open(token_path, "r") as f:
+        SRT_BOT_TOKEN = f.read().strip()
+except:
+    pass
+
+
+def send_srt_bot_msg(token, channel, msg):
+    if token == "" or channel == "": return
+    if msg == "": msg = "Empty msg"
+
+    requests.post("https://slack.com/api/chat.postMessage", headers={"Authorization": f"Bearer {token}"}, data={"channel": channel, "text": msg})
+
+
+def get_now_str():
+    return datetime.now().strftime('%Y-%m-%d %a %H:%M:%S')
+        
+class Train:
+    def __init__(self, train_type, train_num, dpt, arr):
+        self.train_type = train_type
+        self.train_num = train_num
+        self.dpt_stn, self.dpt_time = dpt.split()
+        self.arr_stn, self.arr_time = arr.split()
+
+        self.hash_value = ''.join([self.train_type, self.train_num, self.dpt_stn, self.dpt_time, self.arr_stn, self.arr_time])
+
+    def hash(self):
+        return self.hash_value
+    
+    def to_string(self):
+        return f"{self.train_type}({self.train_num})\n{self.dpt_stn} {self.dpt_time} ▶ {self.arr_stn} {self.arr_time}"
+        
 class SRT:
     def __init__(self, dpt_stn, arr_stn, dpt_dt, dpt_tm, num_trains_to_check=2, want_reserve=False):
         """
@@ -28,16 +68,16 @@ class SRT:
         self.login_id = None
         self.login_psw = None
 
-        self.dpt_stn = dpt_stn
-        self.arr_stn = arr_stn
+        self.dpt_stn = dpt_stn if not str.isdigit(dpt_stn) else num_station_list[int(dpt_stn)] 
+        self.arr_stn = arr_stn if not str.isdigit(arr_stn) else num_station_list[int(arr_stn)]
+
         self.dpt_dt = dpt_dt
-        self.dpt_tm = dpt_tm
+        self.dpt_tm = dpt_tm if int(dpt_tm) % 2 == 0 else str(int(dpt_tm) + 1)
 
         self.num_trains_to_check = num_trains_to_check
         self.want_reserve = want_reserve
         self.driver = None
 
-        self.is_booked = False  # 예약 완료 되었는지 확인용
         self.cnt_refresh = 0  # 새로고침 회수 기록
 
         self.check_input()
@@ -60,7 +100,7 @@ class SRT:
 
     def run_driver(self):
         try:
-            self.driver = webdriver.Chrome(executable_path=chromedriver_path)
+            self.driver = webdriver.Chrome(executable_path=CHROMEDRIVER_PATH)
         except WebDriverException:
             self.driver = webdriver.Chrome(ChromeDriverManager().install())
 
@@ -117,10 +157,9 @@ class SRT:
         # standard_seat는 일반석 검색 결과 텍스트
         
         if "예약하기" in standard_seat:
-            print("예약 가능 클릭")
-
             # Error handling in case that click does not work
             try:
+                print("예약 가능 클릭")
                 self.driver.find_element(By.CSS_SELECTOR,
                                          f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(7) > a").click()
             except ElementClickInterceptedException as err:
@@ -129,13 +168,12 @@ class SRT:
                                          f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(7) > a").send_keys(
                     Keys.ENTER)
             finally:
-                self.driver.implicitly_wait(3)
+                self.driver.implicitly_wait(5)
 
             # 예약이 성공하면
             if self.driver.find_elements(By.ID, 'isFalseGotoMain'):
-                self.is_booked = True
                 print("예약 성공")
-                return self.driver
+                return True
             else:
                 print("잔여석 없음. 다시 검색")
                 self.driver.back()  # 뒤로가기
@@ -150,35 +188,51 @@ class SRT:
         time.sleep(0.5)
 
     def reserve_ticket(self, reservation, i):
-        if "신청하기" in reservation:
-            print("예약 대기 완료")
-            self.driver.find_element(By.CSS_SELECTOR,
-                                     f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(8) > a").click()
-            self.is_booked = True
-            return self.is_booked
+        print("예약 대기 완료")
+        self.driver.find_element(By.CSS_SELECTOR,
+                                    f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(8) > a").click()
+
+    def get_train(self, i):
+        # 열차종류
+        train_type = self.driver.find_element(By.CSS_SELECTOR, f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(2)").text
+        # 열차번호
+        train_num = self.driver.find_element(By.CSS_SELECTOR, f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(3)").text
+        # 출발
+        dpt = self.driver.find_element(By.CSS_SELECTOR, f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(4)").text
+        # 도착
+        arr = self.driver.find_element(By.CSS_SELECTOR, f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(5)").text
+        return Train(train_type, train_num, dpt, arr)
 
     def check_result(self):
+        send_srt_bot_msg(SRT_BOT_TOKEN, SRT_BOT_CHANNEL, f"{get_now_str()}\n*예매조건*\n열차: {self.dpt_stn}▶{self.arr_stn}\n시간: {datetime.strptime(self.dpt_dt, '%Y%m%d').strftime('%Y-%m-%d %a')} {self.dpt_tm}시 이후\n범위: {self.num_trains_to_check}개 대기: {self.want_reserve}")
+
+        booked = defaultdict(lambda: False)
+        reserved = defaultdict(lambda: False)
+
         while True:
             for i in range(1, self.num_trains_to_check+1):
                 try:
                     standard_seat = self.driver.find_element(By.CSS_SELECTOR, f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(7)").text
                     reservation = self.driver.find_element(By.CSS_SELECTOR, f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(8)").text
+                    cur_train = self.get_train(i)
+
                 except StaleElementReferenceException:
                     standard_seat = "매진"
                     reservation = "매진"
 
-                if self.book_ticket(standard_seat, i):
-                    return self.driver
+                if not booked[cur_train.hash()]:
+                    if self.book_ticket(standard_seat, i):
+                        send_srt_bot_msg(SRT_BOT_TOKEN, SRT_BOT_CHANNEL, f"{get_now_str()}\n*{i}번째 순위 예약성공!*\n{cur_train.to_string()}")
+                        booked[cur_train.hash()] = True
+                        if i == 1: return
 
-                if self.want_reserve:
+                if self.want_reserve and not booked[cur_train.hash()] and not reserved[cur_train.hash()] and "신청하기" in reservation:
+                    send_srt_bot_msg(SRT_BOT_TOKEN, SRT_BOT_CHANNEL, f"*{get_now_str()}{i}번째 순위 예약대기!*\n{cur_train.to_string()}")
+                    reserved[cur_train.hash()] = True
                     self.reserve_ticket(reservation, i)
 
-            if self.is_booked:
-                return self.driver
-
-            else:
-                time.sleep(randint(2, 4))
-                self.refresh_result()
+            time.sleep(randint(2, 4))
+            self.refresh_result()
 
     def run(self, login_id, login_psw):
         self.run_driver()

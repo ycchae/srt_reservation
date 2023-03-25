@@ -1,0 +1,5 @@
+__pycache__
+*.bat
+my_*.txt
+_up.sh
+_down.sh
