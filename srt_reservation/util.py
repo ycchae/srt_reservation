@@ -13,6 +13,7 @@ def parse_cli_args():
 
     parser.add_argument("--num", help="no of trains to check", type=int, metavar="2", default=2)
     parser.add_argument("--reserve", help="Reserve or not", type=bool, metavar="2", default=False)
+    parser.add_argument("--greedy", help="Greedy or not", type=bool, metavar="2", default=False)
 
     args = parser.parse_args()
 

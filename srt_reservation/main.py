@@ -56,7 +56,7 @@ class Train:
         return f"{self.train_type}({self.train_num})\n{self.dpt_stn} {self.dpt_time} ▶ {self.arr_stn} {self.arr_time}"
         
 class SRT:
-    def __init__(self, dpt_stn, arr_stn, dpt_dt, dpt_tm, num_trains_to_check=2, want_reserve=False):
+    def __init__(self, dpt_stn, arr_stn, dpt_dt, dpt_tm, num_trains_to_check=2, want_reserve=False, greedy=False):
         """
         :param dpt_stn: SRT 출발역
         :param arr_stn: SRT 도착역
@@ -74,11 +74,17 @@ class SRT:
         self.dpt_dt = dpt_dt
         self.dpt_tm = dpt_tm if int(dpt_tm) % 2 == 0 else str(int(dpt_tm) + 1)
 
+        self.gotcha = 0
         self.num_trains_to_check = num_trains_to_check
         self.want_reserve = want_reserve
+        self.greedy = greedy
+
         self.driver = None
 
-        self.cnt_refresh = 0  # 새로고침 회수 기록
+        self.cnt_tried = 0  # Timeout 횟수 기록
+        self.cnt_refresh = 0  # 새로고침 횟수 기록
+
+        self.success = False
 
         self.check_input()
 
@@ -183,7 +189,7 @@ class SRT:
         submit = self.driver.find_element(By.XPATH, "//input[@value='조회하기']")
         self.driver.execute_script("arguments[0].click();", submit)
         self.cnt_refresh += 1
-        print(f"새로고침 {self.cnt_refresh}회")
+        print(f"새로고침 {self.cnt_tried}-{self.cnt_refresh}회")
         self.driver.implicitly_wait(10)
         time.sleep(0.5)
 
@@ -204,7 +210,7 @@ class SRT:
         return Train(train_type, train_num, dpt, arr)
 
     def check_result(self):
-        send_srt_bot_msg(SRT_BOT_TOKEN, SRT_BOT_CHANNEL, f"{get_now_str()}\n*예약 시작!*\n열차: {self.dpt_stn}▶{self.arr_stn}\n시간: {datetime.strptime(self.dpt_dt, '%Y%m%d').strftime('%Y-%m-%d %a')} {self.dpt_tm}시 이후\n범위: {self.num_trains_to_check}개 대기: {self.want_reserve}")
+        send_srt_bot_msg(SRT_BOT_TOKEN, SRT_BOT_CHANNEL, f"{get_now_str()}\n*예약 시작!*\n열차: {self.dpt_stn}▶{self.arr_stn}\n시간: {datetime.strptime(self.dpt_dt, '%Y%m%d').strftime('%Y-%m-%d %a')} {self.dpt_tm}시 이후\n범위: {self.num_trains_to_check}개\n대기: {self.want_reserve}")
 
         booked = defaultdict(lambda: False)
         reserved = defaultdict(lambda: False)
@@ -224,7 +230,10 @@ class SRT:
                     if self.book_ticket(standard_seat, i):
                         send_srt_bot_msg(SRT_BOT_TOKEN, SRT_BOT_CHANNEL, f"{get_now_str()}\n*{i}번째 순위 예약성공!*\n{cur_train.to_string()}")
                         booked[cur_train.hash()] = True
-                        if i == 1: return
+                        self.gotcha += 1
+                        if not self.greedy or self.gotcha == self.num_trains_to_check:
+                            self.success = True
+                            return
 
                 if self.want_reserve and not booked[cur_train.hash()] and not reserved[cur_train.hash()] and "신청하기" in reservation:
                     send_srt_bot_msg(SRT_BOT_TOKEN, SRT_BOT_CHANNEL, f"*{get_now_str()}{i}번째 순위 예약대기!*\n{cur_train.to_string()}")
@@ -235,11 +244,18 @@ class SRT:
             self.refresh_result()
 
     def run(self, login_id, login_psw):
-        self.run_driver()
-        self.set_log_info(login_id, login_psw)
-        self.login()
-        self.go_search()
-        self.check_result()
+        while not self.success:
+            try:
+                self.cnt_tried += 1
+                self.run_driver()
+                self.set_log_info(login_id, login_psw)
+                self.login()
+                self.go_search()
+                self.check_result()
+            except Exception as e:
+                print(e)
+                pass
+                
 
 #
 # if __name__ == "__main__":
