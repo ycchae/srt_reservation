@@ -12,7 +12,7 @@ from selenium.webdriver.support.select import Select
 from selenium.common.exceptions import ElementClickInterceptedException, StaleElementReferenceException, WebDriverException
 
 from srt_reservation.exceptions import InvalidStationNameError, InvalidDateError, InvalidDateFormatError, InvalidTimeFormatError
-from srt_reservation.validation import station_list
+from srt_reservation.validation import station_list, num_station_list
 
 import requests
 from collections import defaultdict
@@ -204,7 +204,7 @@ class SRT:
         return Train(train_type, train_num, dpt, arr)
 
     def check_result(self):
-        send_srt_bot_msg(SRT_BOT_TOKEN, SRT_BOT_CHANNEL, f"{get_now_str()}\n*예매조건*\n열차: {self.dpt_stn}▶{self.arr_stn}\n시간: {datetime.strptime(self.dpt_dt, '%Y%m%d').strftime('%Y-%m-%d %a')} {self.dpt_tm}시 이후\n범위: {self.num_trains_to_check}개 대기: {self.want_reserve}")
+        send_srt_bot_msg(SRT_BOT_TOKEN, SRT_BOT_CHANNEL, f"{get_now_str()}\n*예약 시작!*\n열차: {self.dpt_stn}▶{self.arr_stn}\n시간: {datetime.strptime(self.dpt_dt, '%Y%m%d').strftime('%Y-%m-%d %a')} {self.dpt_tm}시 이후\n범위: {self.num_trains_to_check}개 대기: {self.want_reserve}")
 
         booked = defaultdict(lambda: False)
         reserved = defaultdict(lambda: False)
