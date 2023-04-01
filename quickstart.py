@@ -20,5 +20,5 @@ if __name__ == "__main__":
     want_reserve = cli_args.reserve
     greedy = cli_args.greedy
 
-    srt = SRT(dpt_stn, arr_stn, dpt_dt, dpt_tm, want_checkout, num_trains_to_check, want_reserve, greedy)
+    srt = SRT(dpt_stn, arr_stn, dpt_dt, dpt_tm, num_trains_to_check, want_checkout, want_reserve, greedy)
     srt.run(login_id, login_psw)

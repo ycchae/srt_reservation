@@ -286,8 +286,13 @@ class SRT:
         self.driver.find_element(By.CSS_SELECTOR, f"#requestIssue1").click()
         time.sleep(5)
 
-        result = self.driver.switch_to_alert()
-        result.accept()
+        try:
+            result = self.driver.switch_to_alert()
+            result.accept()
+        except Exception as e:
+            print(e)
+            from selenium.webdriver.common.alert import Alert
+            Alert(self.driver).accept()
 
         send_srt_bot_msg(SRT_BOT_TOKEN, SRT_BOT_CHANNEL, f"{get_now_str()}\n*결제 성공!*\n{cur_train.to_string()}")
 
