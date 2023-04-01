@@ -9,9 +9,8 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.select import Select
-from selenium.common.exceptions import ElementClickInterceptedException, StaleElementReferenceException, WebDriverException
+from selenium.common.exceptions import WebDriverException
 
-from srt_reservation.exceptions import InvalidStationNameError, InvalidDateError, InvalidDateFormatError, InvalidTimeFormatError
 from srt_reservation.validation import station_list, num_station_list
 
 import requests
@@ -41,7 +40,8 @@ def get_now_str():
     return datetime.now().strftime('%Y-%m-%d %a %H:%M:%S')
         
 class Train:
-    def __init__(self, train_type, train_num, dpt, arr):
+    def __init__(self, dpt_dt, train_type, train_num, dpt, arr):
+        self.dpt_dt = datetime.strptime(dpt_dt, '%Y%m%d')
         self.train_type = train_type
         self.train_num = train_num
         self.dpt_stn, self.dpt_time = dpt.split()
@@ -53,10 +53,46 @@ class Train:
         return self.hash_value
     
     def to_string(self):
-        return f"{self.train_type}({self.train_num})\n{self.dpt_stn} {self.dpt_time} ▶ {self.arr_stn} {self.arr_time}"
+        return f"{self.dpt_dt.strftime('%Y-%m-%d(%a)')} {self.train_type}({self.train_num})\n{self.dpt_stn} {self.dpt_time} ▶ {self.arr_stn} {self.arr_time}"
+    
+class Card:
+    def __init__(self, card_filepath):
+        with open(card_filepath, "r") as f:
+            self.card_numbers = f.readline().strip().split('-')
+            self.valid_mon, self.valid_year = f.readline().strip().split('/')
+            self.pw = f.readline().strip()
+            self.my_number = f.readline().strip()
+        self.validate()
+    
+    def validate(self):
+        if len(self.card_numbers) != 4:
+            raise Exception(f"Invalid card numbers. Should be 4 sets but {len(self.card_numbers)}")
+        
+        if not 1 <= int(self.valid_mon) <= 12:
+            raise Exception(f"Invalid card validate month {self.valid_mon}")
+        
+        cur_year = datetime.today().year
+        cur_year -= (cur_year // 100) * 100
+        if not cur_year <= int(self.valid_year) <= cur_year+12:
+            raise Exception(f"Invalid card validate year {self.valid_year}")
+        
+        if len(self.pw) != 2:
+            raise Exception(f"Password should be 2 digits {self.pw}")
+        try:
+            int(self.pw)
+        except:
+            raise Exception(f"Password should be number {self.pw}")
+
+        if len(self.my_number) != 6:
+            raise Exception(f"My number should be 6 digits {self.my_number}")
+        try:
+            int(self.my_number)
+        except:
+            raise Exception(f"My number should be number {self.my_number}")
+
         
 class SRT:
-    def __init__(self, dpt_stn, arr_stn, dpt_dt, dpt_tm, num_trains_to_check=2, want_reserve=False, greedy=False):
+    def __init__(self, dpt_stn, arr_stn, dpt_dt, dpt_tm, num_trains_to_check=2, want_checkout=True, want_reserve=False, greedy=False):
         """
         :param dpt_stn: SRT 출발역
         :param arr_stn: SRT 도착역
@@ -74,8 +110,10 @@ class SRT:
         self.dpt_dt = dpt_dt
         self.dpt_tm = dpt_tm if int(dpt_tm) % 2 == 0 else str(int(dpt_tm) + 1)
 
-        self.gotcha = 0
         self.num_trains_to_check = num_trains_to_check
+        self.gotcha = 0
+
+        self.want_checkout = want_checkout
         self.want_reserve = want_reserve
         self.greedy = greedy
 
@@ -88,17 +126,28 @@ class SRT:
 
         self.check_input()
 
+
     def check_input(self):
         if self.dpt_stn not in station_list:
-            raise InvalidStationNameError(f"출발역 오류. '{self.dpt_stn}' 은/는 목록에 없습니다.")
+            raise Exception(f"출발역 오류. '{self.dpt_stn}' 은/는 목록에 없습니다.")
         if self.arr_stn not in station_list:
-            raise InvalidStationNameError(f"도착역 오류. '{self.arr_stn}' 은/는 목록에 없습니다.")
+            raise Exception(f"도착역 오류. '{self.arr_stn}' 은/는 목록에 없습니다.")
         if not str(self.dpt_dt).isnumeric():
-            raise InvalidDateFormatError("날짜는 숫자로만 이루어져야 합니다.")
+            raise Exception("날짜는 숫자로만 이루어져야 합니다.")
+        
+        if self.want_checkout:
+            try:
+                card_path = f"{os.path.dirname(os.path.abspath(__file__))}/my_card.txt"
+                self.my_card = Card(card_path)
+            except Exception as e:
+                print(e)
+                self.want_checkout = False
+
         try:
             datetime.strptime(str(self.dpt_dt), '%Y%m%d')
-        except ValueError:
-            raise InvalidDateError("날짜가 잘못 되었습니다. YYYYMMDD 형식으로 입력해주세요.")
+        except Exception as e:
+            print(e)
+            raise Exception("날짜가 잘못 되었습니다. YYYYMMDD 형식으로 입력해주세요.")
 
     def set_log_info(self, login_id, login_psw):
         self.login_id = login_id
@@ -161,18 +210,18 @@ class SRT:
 
     def book_ticket(self, standard_seat, i):
         # standard_seat는 일반석 검색 결과 텍스트
-        
         if "예약하기" in standard_seat:
             # Error handling in case that click does not work
             try:
                 print("예약 가능 클릭")
-                self.driver.find_element(By.CSS_SELECTOR,
-                                         f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(7) > a").click()
-            except ElementClickInterceptedException as err:
+                b = self.driver.find_element(By.CSS_SELECTOR,
+                                         f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(7) > a")
+                if "예약하기" in b.text:
+                    b.click()
+            except Exception as err:
                 print(err)
                 self.driver.find_element(By.CSS_SELECTOR,
-                                         f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(7) > a").send_keys(
-                    Keys.ENTER)
+                                         f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(7) > a").send_keys(Keys.ENTER)
             finally:
                 self.driver.implicitly_wait(5)
 
@@ -207,13 +256,43 @@ class SRT:
         dpt = self.driver.find_element(By.CSS_SELECTOR, f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(4)").text
         # 도착
         arr = self.driver.find_element(By.CSS_SELECTOR, f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(5)").text
-        return Train(train_type, train_num, dpt, arr)
+        return Train(self.dpt_dt, train_type, train_num, dpt, arr)
+
+    def checkout_ticket(self, cur_train):
+        self.driver.find_element(By.CSS_SELECTOR, f".tal_c > a:nth-child(1)").click()
+        self.driver.implicitly_wait(10)
+
+        # 보안키패드 Off
+        self.driver.find_element(By.CSS_SELECTOR, f"#Tk_stlCrCrdNo14_checkbox").click()
+        self.driver.find_element(By.CSS_SELECTOR, f"#Tk_vanPwd1_checkbox").click()
+        # Card Numbers
+        for i in range(1, 5):
+            cn = self.driver.find_element(By.CSS_SELECTOR, f"#stlCrCrdNo1{i}")
+            cn.send_keys(self.my_card.card_numbers[i-1])
+
+        # Valid date
+        Select(self.driver.find_element(By.ID, 'crdVlidTrm1M')).select_by_value(self.my_card.valid_mon)
+        Select(self.driver.find_element(By.ID, 'crdVlidTrm1Y')).select_by_value(self.my_card.valid_year)
+
+        # Password first 2
+        pw = self.driver.find_element(By.CSS_SELECTOR, f"#vanPwd1")
+        pw.send_keys(self.my_card.pw)
+
+        # 인증번호 (주민등록번호 앞 6자리)
+        bd = self.driver.find_element(By.CSS_SELECTOR, f"#athnVal1")
+        bd.send_keys(self.my_card.my_number)
+
+        # 결제버튼
+        self.driver.find_element(By.CSS_SELECTOR, f"#requestIssue1").click()
+        time.sleep(5)
+
+        result = self.driver.switch_to_alert()
+        result.accept()
+
+        send_srt_bot_msg(SRT_BOT_TOKEN, SRT_BOT_CHANNEL, f"{get_now_str()}\n*결제 성공!*\n{cur_train.to_string()}")
 
     def check_result(self):
         send_srt_bot_msg(SRT_BOT_TOKEN, SRT_BOT_CHANNEL, f"{get_now_str()}\n*예약 시작!*\n열차: {self.dpt_stn}▶{self.arr_stn}\n시간: {datetime.strptime(self.dpt_dt, '%Y%m%d').strftime('%Y-%m-%d %a')} {self.dpt_tm}시 이후\n범위: {self.num_trains_to_check}개\n대기: {self.want_reserve}")
-
-        booked = defaultdict(lambda: False)
-        reserved = defaultdict(lambda: False)
 
         while True:
             for i in range(1, self.num_trains_to_check+1):
@@ -222,28 +301,41 @@ class SRT:
                     reservation = self.driver.find_element(By.CSS_SELECTOR, f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(8)").text
                     cur_train = self.get_train(i)
 
-                except StaleElementReferenceException:
+                except Exception as e:
+                    print(e)
                     standard_seat = "매진"
                     reservation = "매진"
 
-                if not booked[cur_train.hash()]:
+                if not self.booked[cur_train.hash()]:
                     if self.book_ticket(standard_seat, i):
                         send_srt_bot_msg(SRT_BOT_TOKEN, SRT_BOT_CHANNEL, f"{get_now_str()}\n*{i}번째 순위 예약성공!*\n{cur_train.to_string()}")
-                        booked[cur_train.hash()] = True
+                        self.booked[cur_train.hash()] = True
                         self.gotcha += 1
+                        if self.want_checkout:
+                            try:
+                                self.checkout_ticket(cur_train)
+                            except Exception as e:
+                                send_srt_bot_msg(SRT_BOT_TOKEN, SRT_BOT_CHANNEL, f"{get_now_str()}\n*결제중 오류!*\n*처리 요망!*\n{cur_train.to_string()}")
+                                print(e)
+                                exit(1)
+
                         if not self.greedy or self.gotcha == self.num_trains_to_check:
                             self.success = True
-                            return
+                        return
 
-                if self.want_reserve and not booked[cur_train.hash()] and not reserved[cur_train.hash()] and "신청하기" in reservation:
+                if self.want_reserve and not self.booked[cur_train.hash()] and not self.reserved[cur_train.hash()] and "신청하기" in reservation:
                     send_srt_bot_msg(SRT_BOT_TOKEN, SRT_BOT_CHANNEL, f"*{get_now_str()}{i}번째 순위 예약대기!*\n{cur_train.to_string()}")
-                    reserved[cur_train.hash()] = True
+                    self.reserved[cur_train.hash()] = True
                     self.reserve_ticket(reservation, i)
 
             time.sleep(randint(2, 4))
             self.refresh_result()
+            self.driver.implicitly_wait(2)
 
     def run(self, login_id, login_psw):
+        self.booked = defaultdict(lambda: False)
+        self.reserved = defaultdict(lambda: False)
+
         while not self.success:
             try:
                 self.cnt_tried += 1
