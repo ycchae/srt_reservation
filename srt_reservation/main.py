@@ -258,6 +258,19 @@ class SRT:
         arr = self.driver.find_element(By.CSS_SELECTOR, f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(5)").text
         return Train(self.dpt_dt, train_type, train_num, dpt, arr)
 
+    def alert_ok(self):
+        time.sleep(2)
+
+        try:
+            self.driver.switch_to_alert().accept()
+        except:
+            try:
+                from selenium.webdriver.common.alert import Alert
+                Alert(self.driver).accept()
+            except Exception as e:
+                print(e)
+                exit(1)
+
     def checkout_ticket(self, cur_train):
         self.driver.find_element(By.CSS_SELECTOR, f".tal_c > a:nth-child(1)").click()
         self.driver.implicitly_wait(10)
@@ -282,17 +295,13 @@ class SRT:
         bd = self.driver.find_element(By.CSS_SELECTOR, f"#athnVal1")
         bd.send_keys(self.my_card.my_number)
 
+        # 스마트폰 발권
+        self.driver.find_element(By.CSS_SELECTOR, f"div.tab.tab3 > ul > li:nth-child(2)").click()
+        self.alert_ok()
+
         # 결제버튼
         self.driver.find_element(By.CSS_SELECTOR, f"#requestIssue1").click()
-        time.sleep(5)
-
-        try:
-            result = self.driver.switch_to_alert()
-            result.accept()
-        except Exception as e:
-            print(e)
-            from selenium.webdriver.common.alert import Alert
-            Alert(self.driver).accept()
+        self.alert_ok()
 
         send_srt_bot_msg(SRT_BOT_TOKEN, SRT_BOT_CHANNEL, f"{get_now_str()}\n*결제 성공!*\n{cur_train.to_string()}")
 
