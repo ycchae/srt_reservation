@@ -12,6 +12,7 @@ def parse_cli_args():
     parser.add_argument("--tm", help="Departure Time", type=str, metavar="08, 10, 12, ...")
     parser.add_argument("--num", help="no of trains to check", type=int, metavar="2", default=2)
 
+    parser.add_argument("--exact_times", help="Exact Times", type=str, metavar="", default="")
     parser.add_argument("--checkout", help="Checkout or not", type=bool, metavar="2", default=True)
     parser.add_argument("--reserve", help="Reserve or not", type=bool, metavar="2", default=False)
     parser.add_argument("--greedy", help="Greedy or not", type=bool, metavar="2", default=False)

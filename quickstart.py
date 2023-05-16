@@ -16,9 +16,10 @@ if __name__ == "__main__":
     dpt_tm = cli_args.tm
     num_trains_to_check = cli_args.num
 
+    exact_tms = cli_args.exact_times
     want_checkout = cli_args.checkout
     want_reserve = cli_args.reserve
     greedy = cli_args.greedy
 
-    srt = SRT(dpt_stn, arr_stn, dpt_dt, dpt_tm, num_trains_to_check, want_checkout, want_reserve, greedy)
+    srt = SRT(dpt_stn, arr_stn, dpt_dt, dpt_tm, exact_tms, num_trains_to_check, want_checkout, want_reserve, greedy)
     srt.run(login_id, login_psw)

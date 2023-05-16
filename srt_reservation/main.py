@@ -92,7 +92,7 @@ class Card:
 
         
 class SRT:
-    def __init__(self, dpt_stn, arr_stn, dpt_dt, dpt_tm, num_trains_to_check=2, want_checkout=True, want_reserve=False, greedy=False):
+    def __init__(self, dpt_stn, arr_stn, dpt_dt, dpt_tm, exact_tms="", num_trains_to_check=2, want_checkout=True, want_reserve=False, greedy=False):
         """
         :param dpt_stn: SRT 출발역
         :param arr_stn: SRT 도착역
@@ -103,12 +103,20 @@ class SRT:
         """
         self.login_id = None
         self.login_psw = None
+        self.is_num_auto_set = False
 
         self.dpt_stn = dpt_stn if not str.isdigit(dpt_stn) else num_station_list[int(dpt_stn)] 
         self.arr_stn = arr_stn if not str.isdigit(arr_stn) else num_station_list[int(arr_stn)]
 
         self.dpt_dt = dpt_dt
-        self.dpt_tm = dpt_tm if int(dpt_tm) % 2 == 0 else str(int(dpt_tm) + 1)
+        self.dpt_tm = dpt_tm if int(dpt_tm) % 2 == 0 else str(int(dpt_tm) - 1)
+        self.exact_tms = exact_tms
+        if len(self.exact_tms) > 0:
+            self.exact_tms = exact_tms.split(",")
+            self.exact_tms.sort(key = lambda x: tuple(map(int, x.split(":"))))
+            self.max_exact_tm = tuple(map(int, self.exact_tms[-1].split(":")))
+            self.num_trains_to_check = num_trains_to_check = 10
+            self.is_num_auto_set = True
 
         self.num_trains_to_check = num_trains_to_check
         self.gotcha = 0
@@ -178,7 +186,7 @@ class SRT:
     def go_search(self):
         # 기차 조회 페이지로 이동
         self.driver.get('https://etk.srail.kr/hpg/hra/01/selectScheduleList.do')
-        self.driver.implicitly_wait(5)
+        self.driver.implicitly_wait(10)
 
         # 출발지 입력
         elm_dpt_stn = self.driver.find_element(By.ID, 'dptRsStnCdNm')
@@ -200,12 +208,21 @@ class SRT:
         self.driver.execute_script("arguments[0].setAttribute('style','display: True;')", elm_dpt_tm)
         Select(self.driver.find_element(By.ID, "dptTm")).select_by_visible_text(self.dpt_tm)
 
-        print("기차를 조회합니다")
-        print(f"출발역:{self.dpt_stn} , 도착역:{self.arr_stn}\n날짜:{self.dpt_dt}, 시간: {self.dpt_tm}시 이후\n{self.num_trains_to_check}개의 기차 중 예약")
-        print(f"예약 대기 사용: {self.want_reserve}")
+        # print("기차를 조회합니다")
+        # print(f"출발역:{self.dpt_stn} , 도착역:{self.arr_stn}\n날짜:{self.dpt_dt}, 시간: {self.dpt_tm}시 이후\n{self.num_trains_to_check}개의 기차 중 예약")
+        # print(f"예약 대기 사용: {self.want_reserve}")
+        start_msg = f"{get_now_str()}\n" \
+                    f"*예약 시작!*\n" \
+                    f"열차: {self.dpt_stn}▶{self.arr_stn}\n" \
+                    f"시간: {datetime.strptime(self.dpt_dt, '%Y%m%d').strftime('%Y-%m-%d %a')} {self.dpt_tm}시 이후\n" \
+                    f"범위: {self.num_trains_to_check}개{'(auto)' if self.is_num_auto_set else ''}\n" \
+                    f"대기: {self.want_reserve}\n" \
+                    f"고른 시간: {self.exact_tms if len(self.exact_tms) != 0 else '-'}"
+        print(start_msg)
+        send_srt_bot_msg(SRT_BOT_TOKEN, SRT_BOT_CHANNEL, start_msg)
 
         self.driver.find_element(By.XPATH, "//input[@value='조회하기']").click()
-        self.driver.implicitly_wait(5)
+        self.driver.implicitly_wait(10)
         time.sleep(1)
 
     def book_ticket(self, standard_seat, i):
@@ -306,8 +323,7 @@ class SRT:
         send_srt_bot_msg(SRT_BOT_TOKEN, SRT_BOT_CHANNEL, f"{get_now_str()}\n*결제 성공!*\n{cur_train.to_string()}")
 
     def check_result(self):
-        send_srt_bot_msg(SRT_BOT_TOKEN, SRT_BOT_CHANNEL, f"{get_now_str()}\n*예약 시작!*\n열차: {self.dpt_stn}▶{self.arr_stn}\n시간: {datetime.strptime(self.dpt_dt, '%Y%m%d').strftime('%Y-%m-%d %a')} {self.dpt_tm}시 이후\n범위: {self.num_trains_to_check}개\n대기: {self.want_reserve}")
-
+        cur_exact_tms_cache = dict()
         while True:
             for i in range(1, self.num_trains_to_check+1):
                 try:
@@ -319,6 +335,13 @@ class SRT:
                     print(e)
                     standard_seat = "매진"
                     reservation = "매진"
+                    continue
+
+                if cur_exact_tms_cache.get(cur_train.dpt_time) is None:
+                    cur_exact_tms_cache[cur_train.dpt_time] = tuple(map(int, cur_train.dpt_time.split(":")))
+                if len(self.exact_tms) != 0 and cur_train.dpt_time not in self.exact_tms:
+                    if max_exact_tm < cur_exact_tms_cache[cur_train.dpt_time]: break
+                    continue
 
                 if not self.booked[cur_train.hash()]:
                     if self.book_ticket(standard_seat, i):
@@ -344,7 +367,7 @@ class SRT:
 
             time.sleep(randint(2, 4))
             self.refresh_result()
-            self.driver.implicitly_wait(2)
+            self.driver.implicitly_wait(10)
 
     def run(self, login_id, login_psw):
         self.booked = defaultdict(lambda: False)
