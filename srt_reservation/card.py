@@ -4,6 +4,8 @@ from datetime import datetime
 class Card:
     def __init__(self, card_filename):
         self.want_checkout = False
+        if card_filename == "None":
+            return
 
         try:
             card_filepath = f"{os.path.dirname(os.path.abspath(__file__))}/{card_filename}"

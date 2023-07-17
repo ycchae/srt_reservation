@@ -17,7 +17,7 @@ from srt_reservation.slackbot import SlackBot
 
 CHROMEDRIVER_PATH = "/usr/bin/chromedriver"
 
-IMPLICIT_WAIT_SEC = 20
+IMPLICIT_WAIT_SEC = 60
 
 def get_now_str():
     return datetime.now().strftime('%Y-%m-%d %a %H:%M:%S')
@@ -121,12 +121,13 @@ class SRThunter:
         # print(f"출발역:{self.dpt_stn} , 도착역:{self.arr_stn}\n날짜:{self.dpt_dt}, 시간: {self.dpt_tm}시 이후\n{self.num_trains_to_check}개의 기차 중 예약")
         # print(f"예약 대기 사용: {self.want_reserve}")
         start_msg = f"{get_now_str()}\n" \
-                    f"*예약 시작!*\n" \
+                    f"*예약 시작! ({'자동' if self.card.want_checkout else '수동'} 결제)*\n" \
                     f"열차: {srt.dpt_stn}▶{srt.arr_stn}\n" \
                     f"시간: {datetime.strptime(srt.dpt_dt, '%Y%m%d').strftime('%Y-%m-%d %a')} {srt.dpt_tm}시{'(auto)' if srt.is_dpt_tm_auto_set else ''} 이후\n" \
                     f"범위: {srt.num_trains_to_check}개{'(auto)' if srt.is_num_auto_set else ''}\n" \
+                    f"인원: 성인({srt.adult}명) 어린이({srt.kid}명) 경로({srt.elder}명)\n" \
                     f"대기: {srt.want_reserve}\n" \
-                    f"고른 시간: {srt.exact_tms if len(srt.exact_tms) != 0 else '-'}"
+                    f"고른 시간: {srt.exact_tms if len(srt.exact_tms) != 0 else '-'}" 
         print(start_msg)
         self.bot.send_slack_bot_msg(start_msg)
 

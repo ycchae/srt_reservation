@@ -21,8 +21,8 @@ if __name__ == "__main__":
     parser.add_argument("--elder", help="num of elders", type=int, metavar="2", default=0)
 
     parser.add_argument("--exact_times", help="Exact Times", type=str, metavar="", default="")
-    parser.add_argument("--slack", help="token_info channel_info", type=str, metavar="my_token.txt my_channel.txt", default="")
-    parser.add_argument("--checkout", help="checkout_info", type=str, metavar="my_card.txt", default=True)
+    parser.add_argument("--slack", help="token_info channel_info", type=str, metavar="my_token.txt my_channel.txt", default="None None")
+    parser.add_argument("--checkout", help="checkout_info", type=str, metavar="my_card.txt", default="None")
     parser.add_argument("--reserve", help="Reserve or not", type=bool, metavar="false", default=False)
     parser.add_argument("--greedy", help="Greedy or not", type=bool, metavar="false", default=False)
 

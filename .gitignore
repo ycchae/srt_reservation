@@ -3,4 +3,5 @@ __pycache__
 my_*.txt
 _up.sh
 _down.sh
-runinfo
+runinfo/down*
+runinfo/up*
