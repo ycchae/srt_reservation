@@ -1,25 +1,31 @@
 """ Quickstart script for InstaPy usage """
 
 # imports
-from srt_reservation.main import SRT
-from srt_reservation.util import parse_cli_args
+import argparse
+
+from srt_reservation.SRThunter import SRThunter
 
 
 if __name__ == "__main__":
-    cli_args = parse_cli_args()
+    parser = argparse.ArgumentParser(description='')
 
-    login_id = cli_args.user
-    login_psw = cli_args.psw
-    dpt_stn = cli_args.dpt
-    arr_stn = cli_args.arr
-    dpt_dt = cli_args.dt
-    dpt_tm = cli_args.tm
-    num_trains_to_check = cli_args.num
+    parser.add_argument("--user", help="Username", type=str, metavar="1234567890")
+    parser.add_argument("--psw", help="Password", type=str, metavar="abc1234")
+    parser.add_argument("--dpt", help="Departure Station", type=str, metavar="동탄")
+    parser.add_argument("--arr", help="Arrival Station", type=str, metavar="동대구")
+    parser.add_argument("--dt", help="Departure Date", type=str, metavar="20220118")
+    parser.add_argument("--tm", help="Departure Time", type=str, metavar="08, 10, 12, ...", default="00")
+    parser.add_argument("--num", help="num of trains to check", type=int, metavar="2", default=2)
+    parser.add_argument("--adult", help="num of adults", type=int, metavar="1", default=1)
+    parser.add_argument("--kid", help="num of kids", type=int, metavar="2", default=0)
+    parser.add_argument("--elder", help="num of elders", type=int, metavar="2", default=0)
 
-    exact_tms = cli_args.exact_times
-    want_checkout = cli_args.checkout
-    want_reserve = cli_args.reserve
-    greedy = cli_args.greedy
+    parser.add_argument("--exact_times", help="Exact Times", type=str, metavar="", default="")
+    parser.add_argument("--slack", help="token_info channel_info", type=str, metavar="my_token.txt my_channel.txt", default="")
+    parser.add_argument("--checkout", help="checkout_info", type=str, metavar="my_card.txt", default=True)
+    parser.add_argument("--reserve", help="Reserve or not", type=bool, metavar="false", default=False)
+    parser.add_argument("--greedy", help="Greedy or not", type=bool, metavar="false", default=False)
 
-    srt = SRT(dpt_stn, arr_stn, dpt_dt, dpt_tm, exact_tms, num_trains_to_check, want_checkout, want_reserve, greedy)
-    srt.run(login_id, login_psw)
+    args = parser.parse_args()
+    
+    SRThunter(args).run()
