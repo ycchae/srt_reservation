@@ -104,6 +104,7 @@ class SRT:
         self.login_id = None
         self.login_psw = None
         self.is_num_auto_set = False
+        self.is_dpt_tm_auto_set = False
 
         self.dpt_stn = dpt_stn if not str.isdigit(dpt_stn) else num_station_list[int(dpt_stn)] 
         self.arr_stn = arr_stn if not str.isdigit(arr_stn) else num_station_list[int(arr_stn)]
@@ -111,14 +112,20 @@ class SRT:
         self.dpt_dt = dpt_dt
         self.dpt_tm = dpt_tm if int(dpt_tm) % 2 == 0 else str(int(dpt_tm) - 1)
         self.exact_tms = exact_tms
+
+        self.num_trains_to_check = num_trains_to_check
         if len(self.exact_tms) > 0:
             self.exact_tms = exact_tms.split(",")
             self.exact_tms.sort(key = lambda x: tuple(map(int, x.split(":"))))
+            self.min_exact_tm = tuple(map(int, self.exact_tms[0].split(":")))
             self.max_exact_tm = tuple(map(int, self.exact_tms[-1].split(":")))
-            self.num_trains_to_check = num_trains_to_check = 10
-            self.is_num_auto_set = True
+            if self.num_trains_to_check < 10:
+                self.num_trains_to_check = 10
+                self.is_num_auto_set = True
+            if(int(dpt_tm) > self.min_exact_tm[0]):
+                self.dpt_tm = str(self.min_exact_tm[0]) if self.min_exact_tm[0] % 2 == 0 else str(self.min_exact_tm[0] - 1)
+                self.is_dpt_tm_auto_set = True
 
-        self.num_trains_to_check = num_trains_to_check
         self.gotcha = 0
 
         self.want_checkout = want_checkout
@@ -214,7 +221,7 @@ class SRT:
         start_msg = f"{get_now_str()}\n" \
                     f"*예약 시작!*\n" \
                     f"열차: {self.dpt_stn}▶{self.arr_stn}\n" \
-                    f"시간: {datetime.strptime(self.dpt_dt, '%Y%m%d').strftime('%Y-%m-%d %a')} {self.dpt_tm}시 이후\n" \
+                    f"시간: {datetime.strptime(self.dpt_dt, '%Y%m%d').strftime('%Y-%m-%d %a')} {self.dpt_tm}시{'(auto)' if self.is_dpt_tm_auto_set else ''} 이후\n" \
                     f"범위: {self.num_trains_to_check}개{'(auto)' if self.is_num_auto_set else ''}\n" \
                     f"대기: {self.want_reserve}\n" \
                     f"고른 시간: {self.exact_tms if len(self.exact_tms) != 0 else '-'}"
@@ -340,7 +347,7 @@ class SRT:
                 if cur_exact_tms_cache.get(cur_train.dpt_time) is None:
                     cur_exact_tms_cache[cur_train.dpt_time] = tuple(map(int, cur_train.dpt_time.split(":")))
                 if len(self.exact_tms) != 0 and cur_train.dpt_time not in self.exact_tms:
-                    if max_exact_tm < cur_exact_tms_cache[cur_train.dpt_time]: break
+                    if self.max_exact_tm < cur_exact_tms_cache[cur_train.dpt_time]: break
                     continue
 
                 if not self.booked[cur_train.hash()]:
