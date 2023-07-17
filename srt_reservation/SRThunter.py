@@ -17,6 +17,8 @@ from srt_reservation.slackbot import SlackBot
 
 CHROMEDRIVER_PATH = "/usr/bin/chromedriver"
 
+IMPLICIT_WAIT_SEC = 20
+
 def get_now_str():
     return datetime.now().strftime('%Y-%m-%d %a %H:%M:%S')
 
@@ -60,11 +62,11 @@ class SRThunter:
 
     def login(self, login_id, login_psw):
         self.driver.get('https://etk.srail.co.kr/cmc/01/selectLoginForm.do')
-        self.driver.implicitly_wait(15)
+        self.driver.implicitly_wait(IMPLICIT_WAIT_SEC)
         self.driver.find_element(By.ID, 'srchDvNm01').send_keys(str(login_id))
         self.driver.find_element(By.ID, 'hmpgPwdCphd01').send_keys(str(login_psw))
         self.driver.find_element(By.XPATH, '//*[@id="login-form"]/fieldset/div[1]/div[1]/div[2]/div/div[2]/input').click()
-        self.driver.implicitly_wait(5)
+        self.driver.implicitly_wait(IMPLICIT_WAIT_SEC)
         return self.driver
 
     def check_login(self):
@@ -77,7 +79,7 @@ class SRThunter:
     def go_search(self, srt):
         # 기차 조회 페이지로 이동
         self.driver.get('https://etk.srail.kr/hpg/hra/01/selectScheduleList.do')
-        self.driver.implicitly_wait(10)
+        self.driver.implicitly_wait(IMPLICIT_WAIT_SEC)
 
         # 출발지 입력
         elm_dpt_stn = self.driver.find_element(By.ID, 'dptRsStnCdNm')
@@ -129,7 +131,7 @@ class SRThunter:
         self.bot.send_slack_bot_msg(start_msg)
 
         self.driver.find_element(By.XPATH, "//input[@value='조회하기']").click()
-        self.driver.implicitly_wait(10)
+        self.driver.implicitly_wait(IMPLICIT_WAIT_SEC)
         time.sleep(1)
 
     def book_ticket(self, standard_seat, i):
@@ -147,7 +149,7 @@ class SRThunter:
                 self.driver.find_element(By.CSS_SELECTOR,
                                          f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(7) > a").send_keys(Keys.ENTER)
             finally:
-                self.driver.implicitly_wait(5)
+                self.driver.implicitly_wait(IMPLICIT_WAIT_SEC)
 
             # 예약이 성공하면
             if self.driver.find_elements(By.ID, 'isFalseGotoMain'):
@@ -156,14 +158,14 @@ class SRThunter:
             else:
                 print("잔여석 없음. 다시 검색")
                 self.driver.back()  # 뒤로가기
-                self.driver.implicitly_wait(5)
+                self.driver.implicitly_wait(IMPLICIT_WAIT_SEC)
 
     def refresh_result(self):
         submit = self.driver.find_element(By.XPATH, "//input[@value='조회하기']")
         self.driver.execute_script("arguments[0].click();", submit)
         self.cnt_refresh += 1
         print(f"새로고침 {self.cnt_tried}-{self.cnt_refresh}회")
-        self.driver.implicitly_wait(10)
+        self.driver.implicitly_wait(IMPLICIT_WAIT_SEC)
         time.sleep(0.5)
 
     def reserve_ticket(self, i):
@@ -199,7 +201,7 @@ class SRThunter:
 
     def checkout_ticket(self, my_card, cur_train):
         self.driver.find_element(By.CSS_SELECTOR, f".tal_c > a:nth-child(1)").click()
-        self.driver.implicitly_wait(10)
+        self.driver.implicitly_wait(IMPLICIT_WAIT_SEC)
 
         # 보안키패드 Off
         self.driver.find_element(By.CSS_SELECTOR, f"#Tk_stlCrCrdNo14_checkbox").click()
@@ -284,4 +286,4 @@ class SRThunter:
 
             time.sleep(randint(2, 4))
             self.refresh_result()
-            self.driver.implicitly_wait(10)
+            self.driver.implicitly_wait(IMPLICIT_WAIT_SEC)
