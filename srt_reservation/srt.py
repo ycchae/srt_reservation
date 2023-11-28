@@ -36,13 +36,17 @@ class SRT:
         if not str(self.dpt_dt).isnumeric():
             raise Exception("날짜는 숫자로만 이루어져야 합니다.")
 
-        self.dpt_tm = dpt_tm if int(dpt_tm) % 2 == 0 else str(int(dpt_tm) - 1)
+        self.set_dpt_tm(dpt_tm)
         self.num_trains_to_check = num
 
         self.is_num_auto_set = False
         self.is_dpt_tm_auto_set = False
                
         self.gotcha = 0
+
+    def set_dpt_tm(self, dpt_tm):
+        dpt_tm = str(dpt_tm) if int(dpt_tm) % 2 == 0 else str(int(dpt_tm) - 1)
+        self.dpt_tm = dpt_tm.zfill(2)
 
     
     def init_results(self):
@@ -59,8 +63,8 @@ class SRT:
             if self.num_trains_to_check < 10:
                 self.num_trains_to_check = 10
                 self.is_num_auto_set = True
-            if(int(self.dpt_tm) > self.min_exact_tm[0]):
-                self.dpt_tm = str(self.min_exact_tm[0]) if self.min_exact_tm[0] % 2 == 0 else str(self.min_exact_tm[0] - 1)
+            if abs(int(self.dpt_tm) - self.min_exact_tm[0]) > 2:
+                self.set_dpt_tm(self.min_exact_tm[0])
                 self.is_dpt_tm_auto_set = True
         return self
 

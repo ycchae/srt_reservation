@@ -1,12 +1,13 @@
 #!/bin/bash
 
-trap "kill -9 $(pgrep -lfa python | grep -e quickstart.py | awk '{print $1}'); kill -9 $(pgrep -lfa bash | grep -e ./run.sh -e srt_reservation | awk '{print $1}'); exit 1" SIGINT
+# trap "kill -9 $(pgrep -lfa python | grep -e quickstart.py | awk '{print $1}'); kill -9 $(pgrep -lfa bash | grep -e ./run.sh -e srt_reservation | awk '{print $1}'); exit 1" SIGINT
 
 result=1
 while [ $result -ne 0 ]
 do
+    sleep 1s
     SECONDS=0
-
+    rm -rf /tmp/.org.chromium.Chromium*
     echo 3 | sudo tee /proc/sys/vm/drop_caches > /dev/null
     timeout 1800s bash $(dirname $0)/${1}.sh
     result=$?

@@ -9,13 +9,15 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.select import Select
 from selenium.common.exceptions import WebDriverException
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 from srt_reservation.srt import SRT
 from srt_reservation.train import Train
 from srt_reservation.card import Card
 from srt_reservation.slackbot import SlackBot
 
-CHROMEDRIVER_PATH = "/usr/bin/chromedriver"
+CHROMEDRIVER_PATH = "/usr/local/bin/chromedriver"
 
 IMPLICIT_WAIT_SEC = 60
 
@@ -56,7 +58,7 @@ class SRThunter:
 
     def run_driver(self):
         try:
-            self.driver = webdriver.Chrome(executable_path=CHROMEDRIVER_PATH)
+            self.driver = webdriver.Chrome()
         except WebDriverException:
             self.driver = webdriver.Chrome(ChromeDriverManager().install())
 
@@ -81,6 +83,7 @@ class SRThunter:
         self.driver.get('https://etk.srail.kr/hpg/hra/01/selectScheduleList.do')
         self.driver.implicitly_wait(IMPLICIT_WAIT_SEC)
 
+        time.sleep(2)
         # 출발지 입력
         elm_dpt_stn = self.driver.find_element(By.ID, 'dptRsStnCdNm')
         elm_dpt_stn.clear()
@@ -131,9 +134,9 @@ class SRThunter:
         print(start_msg)
         self.bot.send_slack_bot_msg(start_msg)
 
-        self.driver.find_element(By.XPATH, "//input[@value='조회하기']").click()
+
+        self.driver.find_element(By.CSS_SELECTOR, "#search_top_tag > input").click()
         self.driver.implicitly_wait(IMPLICIT_WAIT_SEC)
-        time.sleep(1)
 
     def book_ticket(self, standard_seat, i):
         # standard_seat는 일반석 검색 결과 텍스트
@@ -152,14 +155,29 @@ class SRThunter:
             finally:
                 self.driver.implicitly_wait(IMPLICIT_WAIT_SEC)
 
-            # 예약이 성공하면
-            if self.driver.find_elements(By.ID, 'isFalseGotoMain'):
+            # old code
+            # # 예약이 성공하면
+            # if self.driver.find_elements(By.ID, 'isFalseGotoMain'):
+            #     print("예약 성공")
+            #     return True
+            # else:
+            #     print("잔여석 없음. 다시 검색")                
+            
+            # Test 후 적용 예정
+            wait = WebDriverWait(self.driver, 10)  # 최대 10초까지 대기
+            try:
+                wait.until(EC.presence_of_element_located((By.ID, "isFalseGotoMain")))
                 print("예약 성공")
                 return True
-            else:
-                print("잔여석 없음. 다시 검색")
-                self.driver.back()  # 뒤로가기
-                self.driver.implicitly_wait(IMPLICIT_WAIT_SEC)
+            except:
+                try:
+                    wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#wrap > div.container.container-e > div > div.sub_con_area > div.box2.val_m.tal_c > span")))
+                    print("잔여석 없음")
+                    self.driver.back()  # 뒤로가기
+                    self.driver.implicitly_wait(IMPLICIT_WAIT_SEC)
+                except:
+                    print("알 수 없는 에러")
+                    return False
 
     def refresh_result(self):
         submit = self.driver.find_element(By.XPATH, "//input[@value='조회하기']")
@@ -167,7 +185,7 @@ class SRThunter:
         self.cnt_refresh += 1
         print(f"새로고침 {self.cnt_tried}-{self.cnt_refresh}회")
         self.driver.implicitly_wait(IMPLICIT_WAIT_SEC)
-        time.sleep(0.5)
+        # time.sleep(0.5)
 
     def reserve_ticket(self, i):
         self.driver.find_element(By.CSS_SELECTOR,
@@ -186,18 +204,23 @@ class SRThunter:
         return Train(dpt_dt, train_type, train_num, dpt, arr)
 
     def alert_ok(self, print_trace=True):
-        time.sleep(2)
-
         try:
-            self.driver.switch_to_alert().accept()
+            WebDriverWait(self.driver, 3).until(EC.alert_is_present())
+            alert = self.driver.switch_to.alert
+            alert.send_keys(Keys.ENTER)
         except:
             try:
-                from selenium.webdriver.common.alert import Alert
-                Alert(self.driver).accept()
+                time.sleep(2)
+                alert = self.driver.switch_to_alert()
+                alert.accept()
             except Exception as e:
-                if print_trace:
-                    print(e)
-                return False
+                try:
+                    from selenium.webdriver.common.alert import Alert
+                    Alert(self.driver).accept()
+                except:
+                    if print_trace:
+                        print(e)
+                    return False
         return True
 
     def checkout_ticket(self, my_card, cur_train):
@@ -227,6 +250,9 @@ class SRThunter:
         # 스마트폰 발권
         self.driver.find_element(By.CSS_SELECTOR, f"div.tab.tab3 > ul > li:nth-child(2)").click()
         self.alert_ok()
+
+        # # 결제조건 동의
+        # self.driver.find_element(By.CSS_SELECTOR, f"#agreeTmp").click()
 
         # 결제버튼
         self.driver.find_element(By.CSS_SELECTOR, f"#requestIssue1").click()
@@ -285,6 +311,6 @@ class SRThunter:
                     srt.reserved[cur_train.hash()] = True
                     self.reserve_ticket(reservation, i)
 
-            time.sleep(randint(2, 4))
+            time.sleep(randint(0, 3))
             self.refresh_result()
             self.driver.implicitly_wait(IMPLICIT_WAIT_SEC)
