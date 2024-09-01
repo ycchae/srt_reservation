@@ -1,3 +1,4 @@
+.env
 __pycache__
 *.bat
 my_*.txt
@@ -5,3 +6,7 @@ _up.sh
 _down.sh
 !runinfo/run.sh
 runinfo
+*.zip
+chromedriver*
+chrome*
+.venv
