@@ -6,6 +6,7 @@ from random import randint
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
@@ -68,8 +69,9 @@ class SRThunter:
         # chrome_options.add_argument("disable-gpu")
         # chrome_options.add_argument(
         #     "user-agent=Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
-        chrome_service = webdriver.ChromeService(executable_path=os.getenv("CHROMEDRIVER_PATH"))
-        self.driver = webdriver.Chrome(options=chrome_options, service=chrome_service)
+        chrome_service = Service(executable_path=os.getenv("CHROMEDRIVER_PATH"))
+        self.driver = webdriver.Chrome(options = chrome_options, service=chrome_service, keep_alive=True)
+        # self.driver = webdriver.Chrome()
         self.driver.implicitly_wait(IMPLICIT_WAIT_SEC)
 
     def login(self, login_id, login_psw):
@@ -157,6 +159,7 @@ class SRThunter:
                                              f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(7) > a")
                 if "예약하기" in b.text:
                     b.click()
+                    self.alert_ok()
             except Exception as err:
                 print(err)
                 self.driver.find_element(By.CSS_SELECTOR,
@@ -174,7 +177,7 @@ class SRThunter:
             #     print("잔여석 없음. 다시 검색")
 
             # Test 후 적용 예정
-            wait = WebDriverWait(self.driver, 10)  # 최대 10초까지 대기
+            wait = WebDriverWait(self.driver, 60)  # 최대 60초까지 대기
             try:
                 wait.until(EC.presence_of_element_located((By.ID, "isFalseGotoMain")))
                 print("예약 성공")
@@ -239,7 +242,8 @@ class SRThunter:
         return True
 
     def checkout_ticket(self, my_card, cur_train):
-        self.driver.find_element(By.CSS_SELECTOR, f".tal_c > a:nth-child(1)").click()
+        print("결재시작")
+        self.driver.find_element(By.CSS_SELECTOR, "#list-form > fieldset > div.tal_c > a.btn_large.btn_blue_dark.val_m.mgr10").click()
 
         # 보안키패드 Off
         self.driver.find_element(By.CSS_SELECTOR, f"#Tk_stlCrCrdNo14_checkbox").click()
@@ -272,6 +276,7 @@ class SRThunter:
         self.driver.find_element(By.CSS_SELECTOR, f"#requestIssue1").click()
         self.alert_ok()
 
+        print(f"{get_now_str()}\n*결제 성공!*\n{cur_train.to_string()}")
         self.bot.send_slack_bot_msg(f"{get_now_str()}\n*결제 성공!*\n{cur_train.to_string()}")
 
     def check_result(self, srt):
@@ -284,6 +289,14 @@ class SRThunter:
                     if not self.alert_ok(print_trace=False): break
                 except:
                     pass
+            
+            # WebDriverWait(self.driver, 120).until(
+            #     EC.invisibility_of_element_located((By.CSS_SELECTOR, '#NetFunnel_Skin_Top'))
+            # )
+            # loading = self.driver.find_element(By.CSS_SELECTOR, '#NetFunnel_Skin_Top')
+            # while loading.is_displayed():
+            #     "WAIT"
+            
 
             for i in range(1, srt.num_trains_to_check + 1):
                 try:
@@ -308,6 +321,7 @@ class SRThunter:
                 if not srt.booked[cur_train.hash()]:
                     if self.book_ticket(standard_seat, i):
                         self.bot.send_slack_bot_msg(f"{get_now_str()}\n*{i}번째 순위 예약성공!*\n{cur_train.to_string()}")
+                        print(f"{get_now_str()}\n*{i}번째 순위 예약성공!*\n{cur_train.to_string()}")
                         srt.booked[cur_train.hash()] = True
                         srt.gotcha += 1
                         if self.card.want_checkout:
@@ -316,6 +330,7 @@ class SRThunter:
                             except Exception as e:
                                 self.bot.send_slack_bot_msg(
                                     f"{get_now_str()}\n*결제중 오류!*\n*처리 요망!*\n{cur_train.to_string()}")
+                                print(f"{get_now_str()}\n*결제중 오류!*\n*처리 요망!*\n{cur_train.to_string()}")
                                 print(e)
                                 exit(1)
 
