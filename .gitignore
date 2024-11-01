@@ -10,3 +10,4 @@ runinfo
 chromedriver*
 chrome*
 .venv
+venv
