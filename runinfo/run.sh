@@ -5,11 +5,12 @@
 result=1
 while [ $result -ne 0 ]
 do
-    sleep 1s
+    sleep 1
+    source ../venv/bin/activate
     SECONDS=0
-    rm -rf /tmp/.org.chromium.Chromium*
-    echo 3 | sudo tee /proc/sys/vm/drop_caches > /dev/null
-    timeout 1800s bash $(dirname $0)/${1}.sh
+    #rm -rf /tmp/.org.chromium.Chromium*
+    #echo 3 | sudo tee /proc/sys/vm/drop_caches > /dev/null
+    timeout 1800s bash $(dirname $0)/${1}
     result=$?
 
     secs=$SECONDS

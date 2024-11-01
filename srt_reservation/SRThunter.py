@@ -17,8 +17,9 @@ from srt_reservation.card import Card
 from srt_reservation.slackbot import SlackBot
 from srt_reservation.srt import SRT
 from srt_reservation.train import Train
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 
-IMPLICIT_WAIT_SEC = 60
+IMPLICIT_WAIT_SEC = 10
 
 
 def get_now_str():
@@ -69,10 +70,10 @@ class SRThunter:
         # chrome_options.add_argument("disable-gpu")
         # chrome_options.add_argument(
         #     "user-agent=Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
-        chrome_service = Service(executable_path=os.getenv("CHROMEDRIVER_PATH"))
-        self.driver = webdriver.Chrome(options = chrome_options, service=chrome_service, keep_alive=True)
-        # self.driver = webdriver.Chrome()
-        self.driver.implicitly_wait(IMPLICIT_WAIT_SEC)
+
+        chrome_service = webdriver.ChromeService(executable_path=os.getenv("CHROMEDRIVER_PATH"))
+        self.driver = webdriver.Chrome(options=chrome_options, service=chrome_service)
+        # self.driver.implicitly_wait(IMPLICIT_WAIT_SEC)
 
     def login(self, login_id, login_psw):
         self.driver.get('https://etk.srail.co.kr/cmc/01/selectLoginForm.do')
@@ -297,6 +298,16 @@ class SRThunter:
             # while loading.is_displayed():
             #     "WAIT"
             
+
+            try:
+                WebDriverWait(self.driver, 0.5).until(EC.visibility_of_element_located((By.ID, "NetFunnel_Loading_Popup")))
+                print("대기 팝업 등장")
+                WebDriverWait(self.driver, 180).until(EC.invisibility_of_element_located((By.ID, "NetFunnel_Loading_Popup")))
+            except TimeoutException:
+                pass
+            except NoSuchElementException:
+                pass
+
 
             for i in range(1, srt.num_trains_to_check + 1):
                 try:
